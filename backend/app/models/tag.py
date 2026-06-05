@@ -2,41 +2,46 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Table, Column
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.user import User
-    from app.models.tag import Tag
+    from app.models.todo import Todo
 
 
-class Todo(Base):
-    """Todo model."""
+# Association table for many-to-many relationship between todos and tags
+todo_tags = Table(
+    "todo_tags",
+    Base.metadata,
+    Column("todo_id", ForeignKey("todos.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
+)
 
-    __tablename__ = "todos"
+
+class Tag(Base):
+    """Tag model."""
+
+    __tablename__ = "tags"
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True,
         default=uuid.uuid4,
     )
-    title: Mapped[str] = mapped_column(
-        String(200),
-        nullable=False,
-    )
-    description: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-    completed: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-    )
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
+    )
+    name: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+    color: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -49,17 +54,17 @@ class Todo(Base):
     )
 
     # Relationships
-    user: Mapped["User"] = relationship(  # noqa: F821
+    user: Mapped["User"] = relationship(
         "User",
-        back_populates="todos",
+        back_populates="tags",
         lazy="select",
     )
-    tags: Mapped[list["Tag"]] = relationship(  # noqa: F821
-        "Tag",
-        secondary="todo_tags",
-        back_populates="todos",
+    todos: Mapped[list["Todo"]] = relationship(
+        "Todo",
+        secondary=todo_tags,
+        back_populates="tags",
         lazy="select",
     )
 
     def __repr__(self) -> str:
-        return f"<Todo {self.title}>"
+        return f"<Tag {self.name}>"

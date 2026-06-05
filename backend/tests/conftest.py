@@ -56,6 +56,9 @@ def override_get_redis():
     mock_redis.get = AsyncMock(return_value=None)
     mock_redis.set = AsyncMock()
     mock_redis.delete = AsyncMock()
+    # Mock client.scan() for cache invalidation
+    mock_redis.client.scan = AsyncMock(return_value=(0, []))
+    mock_redis.client.delete = AsyncMock()
     return mock_redis
 
 
@@ -83,3 +86,48 @@ def auth_headers() -> dict:
     """Create auth headers with a valid token for testing."""
     token = create_access_token(data={"sub": "00000000-0000-0000-0000-000000000001"})
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+async def user_token(client: AsyncClient) -> str:
+    """Create a test user and return their access token."""
+    # Register user
+    await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "testuser@example.com",
+            "password": "testpassword123",
+        },
+    )
+    # Login
+    response = await client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "testuser@example.com",
+            "password": "testpassword123",
+        },
+    )
+    return response.json()["access_token"]
+
+
+@pytest.fixture
+async def another_user_token(client: AsyncClient) -> str:
+    """Create another test user and return their access token."""
+    # Register user
+    await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "anotheruser@example.com",
+            "password": "testpassword123",
+        },
+    )
+    # Login
+    response = await client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "anotheruser@example.com",
+            "password": "testpassword123",
+        },
+    )
+    return response.json()["access_token"]
+

@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
+import type { Tag } from "@/features/tags/api/tags";
 
 export interface Todo {
   id: string;
@@ -11,6 +12,7 @@ export interface Todo {
   user_id: string;
   created_at: string;
   updated_at: string;
+  tags: Tag[];
 }
 
 interface TodoListResponse {
@@ -31,14 +33,37 @@ interface UpdateTodoRequest {
   completed?: boolean;
 }
 
+interface TodoFilters {
+  page?: number;
+  size?: number;
+  status?: "active" | "completed";
+  tag_id?: string;
+  keyword?: string;
+  date_from?: string;
+  date_to?: string;
+}
 
-export function useTodos(page: number = 1, size: number = 10000) {
+interface BulkStatusUpdate {
+  todo_ids: string[];
+  completed: boolean;
+}
+
+
+export function useTodos(filters: TodoFilters = {}) {
+  const { page = 1, size = 10000, ...otherFilters } = filters;
+  
   return useQuery({
-    queryKey: ["todos"],
+    queryKey: ["todos", page, size, otherFilters],
     queryFn: async (): Promise<TodoListResponse> => {
-      const response = await api.get("/todos", {
-        params: { page, size },
-      });
+      const params: Record<string, any> = { page, size };
+      
+      if (otherFilters.status) params.status = otherFilters.status;
+      if (otherFilters.tag_id) params.tag_id = otherFilters.tag_id;
+      if (otherFilters.keyword) params.keyword = otherFilters.keyword;
+      if (otherFilters.date_from) params.date_from = otherFilters.date_from;
+      if (otherFilters.date_to) params.date_to = otherFilters.date_to;
+      
+      const response = await api.get("/todos", { params });
       return response.data;
     },
   });
@@ -78,21 +103,31 @@ export function useUpdateTodo() {
       await queryClient.cancelQueries({ queryKey: ["todos"] });
 
       // Snapshot previous value
-      const previousTodos = queryClient.getQueryData<TodoListResponse>(["todos"]);
+      const previousTodos = queryClient.getQueriesData<TodoListResponse>({ queryKey: ["todos"] });
 
-      // Optimistically update
-      if (previousTodos) {
-        queryClient.setQueryData<TodoListResponse>(["todos"], {
-          ...previousTodos,
-          items: previousTodos.items.map((todo) =>
-            todo.id === id ? { ...todo, ...data } : todo
-          ),
-        });
-      }
+      // Optimistically update all matching queries
+      queryClient.setQueriesData<TodoListResponse>(
+        { queryKey: ["todos"] },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            items: old.items.map((todo) =>
+              todo.id === id ? { ...todo, ...data } : todo
+            ),
+          };
+        }
+      );
 
       return { previousTodos };
     },
-    onError: () => {
+    onError: (_error, _variables, context) => {
+      // Rollback on error
+      if (context?.previousTodos) {
+        context.previousTodos.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
       toast.error("Failed to update todo");
     },
     onSettled: () => {
@@ -128,4 +163,20 @@ export function useToggleTodo() {
       });
     },
   };
+}
+
+export function useBulkUpdateStatus() {
+  return useMutation({
+    mutationFn: async (data: BulkStatusUpdate): Promise<void> => {
+      await api.patch("/todos/bulk-status", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["todos"] });
+      toast.success("Todos updated successfully!");
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || "Failed to update todos";
+      toast.error(message);
+    },
+  });
 }

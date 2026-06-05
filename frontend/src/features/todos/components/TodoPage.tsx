@@ -1,69 +1,145 @@
 import { useState } from "react";
-import { Plus, LogOut } from "lucide-react";
+import { Plus, LogOut, Tag as TagIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useTodos } from "../api/todos";
 import { TodoList } from "./TodoList";
 import { TodoForm } from "./TodoForm";
+import { TodoFilters } from "./TodoFilters";
+import { BulkActions } from "./BulkActions";
+import { TagManager } from "@/features/tags/components/TagManager";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { queryClient } from "@/lib/queryClient";
 
 export function TodoPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const { data, isLoading, error } = useTodos();
+  const [showTagManager, setShowTagManager] = useState(false);
+  const [filters, setFilters] = useState<{
+    status?: "active" | "completed";
+    tag_id?: string;
+    keyword?: string;
+    date_from?: string;
+    date_to?: string;
+  }>({});
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const { data, isLoading, error } = useTodos(filters);
   const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    // Clear all cached data on logout
+    queryClient.clear();
+    logout();
+  };
+
+  const handleSelect = (id: string, selected: boolean) => {
+    setSelectedIds((prev) =>
+      selected ? [...prev, id] : prev.filter((i) => i !== id)
+    );
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds([]);
+  };
 
   return (
     <div className="min-h-screen bg-muted/40">
       {/* Header */}
       <header className="bg-card border-b">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold">Todo App</h1>
             {user && (
               <p className="text-sm text-muted-foreground">{user.email}</p>
             )}
           </div>
-          <Button variant="ghost" size="sm" onClick={logout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowTagManager(!showTagManager)}
+            >
+              <TagIcon className="h-4 w-4 mr-2" />
+              {showTagManager ? "Hide Tags" : "Manage Tags"}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 
       {/* Main content */}
-      <main className="max-w-3xl mx-auto px-4 py-8">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg">My Todos</CardTitle>
-            <Button size="sm" onClick={() => setShowCreateForm(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              Add Todo
-            </Button>
-          </CardHeader>
-          <Separator />
-          <CardContent className="pt-4">
-            {isLoading && (
-              <div className="text-center py-12 text-muted-foreground">
-                Loading todos...
-              </div>
-            )}
+      <main className="max-w-6xl mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
+          {/* Main content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Filters */}
+            <TodoFilters filters={filters} onFilterChange={setFilters} />
 
-            {error && (
-              <div className="text-center py-12 text-destructive">
-                Failed to load todos. Please try again.
-              </div>
-            )}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-lg">My Todos</CardTitle>
+                <div className="flex items-center gap-2">
+                  {selectedIds.length > 0 && (
+                    <span className="text-sm text-muted-foreground">
+                      {selectedIds.length} selected
+                    </span>
+                  )}
+                  <Button size="sm" onClick={() => setShowCreateForm(true)}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Todo
+                  </Button>
+                </div>
+              </CardHeader>
+              <Separator />
+              <CardContent className="pt-4">
+                {isLoading && (
+                  <div className="text-center py-12 text-muted-foreground">
+                    Loading todos...
+                  </div>
+                )}
 
-            {data && <TodoList todos={data.items} />}
+                {error && (
+                  <div className="text-center py-12 text-destructive">
+                    Failed to load todos. Please try again.
+                  </div>
+                )}
 
-            {data && data.total > 0 && (
-              <div className="mt-4 text-center text-sm text-muted-foreground">
-                Showing {data.items.length} of {data.total} todos
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                {data && (
+                  <TodoList
+                    todos={data.items}
+                    selectedIds={selectedIds}
+                    onSelect={handleSelect}
+                  />
+                )}
+
+                {data && data.total > 0 && (
+                  <div className="mt-4 text-center text-sm text-muted-foreground">
+                    Showing {data.items.length} of {data.total} todos
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Sidebar - Tag Manager */}
+          {showTagManager && (
+            <div className="lg:col-span-1 fixed lg:relative top-20 lg:top-0 right-4 lg:right-0 w-[calc(100%-2rem)] lg:w-auto z-[1000] lg:z-auto max-h-[calc(100vh-6rem)] lg:max-h-none overflow-y-auto shadow-2xl lg:shadow-none">
+              <Card className="border-2 lg:border">
+                <CardHeader className="bg-background/95 backdrop-blur-sm lg:bg-transparent">
+                  <CardTitle className="text-lg">Tag Management</CardTitle>
+                </CardHeader>
+                <Separator />
+                <CardContent className="pt-4 bg-background/95 backdrop-blur-sm lg:bg-transparent">
+                  <TagManager />
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
       </main>
 
       {/* Create Todo Dialog */}
@@ -71,6 +147,12 @@ export function TodoPage() {
         mode="create"
         open={showCreateForm}
         onClose={() => setShowCreateForm(false)}
+      />
+
+      {/* Bulk Actions Bar */}
+      <BulkActions
+        selectedIds={selectedIds}
+        onClearSelection={handleClearSelection}
       />
     </div>
   );

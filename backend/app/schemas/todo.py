@@ -15,6 +15,11 @@ class TodoUpdate(BaseModel):
     completed: bool | None = None
 
 
+class BulkStatusUpdate(BaseModel):
+    todo_ids: list[uuid.UUID] = Field(..., min_items=1)
+    completed: bool
+
+
 class TodoResponse(BaseModel):
     id: uuid.UUID
     title: str
@@ -24,6 +29,7 @@ class TodoResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     user_email: str | None = None
+    tags: list["TagResponse"] = []
 
     model_config = {"from_attributes": True}
 
@@ -33,3 +39,10 @@ class TodoListResponse(BaseModel):
     total: int
     page: int
     size: int
+
+
+# Avoid circular import
+from app.schemas.tag import TagResponse  # noqa: E402
+
+TodoResponse.model_rebuild()
+

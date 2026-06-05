@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import auth, todos
+from app.api.v1 import auth, todos, tags
 from app.core.redis import redis_client
 from app.db.session import engine
 
@@ -37,6 +37,24 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(todos.router, prefix="/api/v1/todos", tags=["Todos"])
+app.include_router(tags.router, prefix="/api/v1/tags", tags=["Tags"])
+
+
+@app.get("/")
+async def root():
+    """Root endpoint with API information"""
+    return {
+        "message": "Welcome to Fabbi Todo API",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "redoc": "/redoc",
+        "health": "/health",
+        "endpoints": {
+            "auth": "/api/v1/auth",
+            "todos": "/api/v1/todos",
+            "tags": "/api/v1/tags"
+        }
+    }
 
 
 @app.get("/health")
