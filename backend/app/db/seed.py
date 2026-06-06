@@ -12,6 +12,7 @@ from faker import Faker
 from app.db.session import async_session_maker
 from app.models.user import User
 from app.models.todo import Todo
+from app.models.tag import Tag  # noqa: F401 - Import to register model
 from app.core.security import get_password_hash
 
 DEMO_EMAIL = "demo@test.com"

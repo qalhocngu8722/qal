@@ -12,7 +12,8 @@ from app.schemas.user import (
     UserCreate,
     UserResponse,
 )
-from app.services.auth_service import create_user, get_user_by_email
+from app.services.auth_service import create_user, get_user_by_email, get_user_by_id
+import uuid
 
 router = APIRouter()
 
@@ -81,15 +82,36 @@ async def refresh_token(
     redis: RedisClient = Depends(get_redis),
 ):
     """Refresh access token using refresh token."""
-    payload = verify_token(request.refresh_token)
+    payload = verify_token(request.refresh_token, token_type="refresh")
 
-    if payload is None or payload.get("type") != "refresh":
+    if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
         )
 
     user_id = payload.get("sub")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+    
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user ID in token",
+        )
+    
+    user = await get_user_by_id(db, user_uuid)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+    
     access_token = create_access_token(data={"sub": user_id})
     refresh_token = create_refresh_token(data={"sub": user_id})
 

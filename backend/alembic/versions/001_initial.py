@@ -27,7 +27,10 @@ def upgrade() -> None:
         sa.Column("hashed_password", sa.String(length=255), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("email", name="uq_users_email"),
     )
+    # Create index on email for faster lookups
+    op.create_index("ix_users_email", "users", ["email"])
 
     # Create todos table
     op.create_table(
@@ -39,11 +42,17 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Uuid(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
+    # Create indexes for better query performance
+    op.create_index("ix_todos_user_id", "todos", ["user_id"])
+    op.create_index("ix_todos_user_id_completed", "todos", ["user_id", "completed"])
 
 
 def downgrade() -> None:
+    op.drop_index("ix_todos_user_id_completed", table_name="todos")
+    op.drop_index("ix_todos_user_id", table_name="todos")
     op.drop_table("todos")
+    op.drop_index("ix_users_email", table_name="users")
     op.drop_table("users")

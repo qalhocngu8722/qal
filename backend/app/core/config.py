@@ -3,9 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = (
-        "postgresql+asyncpg://fabbi:fabbi_secret@localhost:5432/postgres"
-    )
+    DATABASE_URL: str = "sqlite+aiosqlite:///./app.db"
     DB_ECHO: bool = True
 
     # Redis
